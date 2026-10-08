@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PokéType Master - 포켓몬 상성 트레이너</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            pkm: {
+              normal: '#A8A77A',
+              fire: '#EE8130',
+              water: '#6390F0',
+              electric: '#F7D02C',
+              grass: '#7AC74C',
+              ice: '#96D9D6',
+              fighting: '#C22E28',
+              poison: '#A33EA1',
+              ground: '#E2BF65',
+              flying: '#A98FF3',
+              psychic: '#F95587',
+              bug: '#A6B91A',
+              rock: '#B6A136',
+              ghost: '#70559B',
+              dragon: '#6F35FC',
+              steel: '#B7B7CE',
+              fairy: '#D685AD',
+              dark: '#705746'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800;900&display=swap');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      touch-action: manipulation;
+    }
+    .shake {
+      animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+    }
+    @keyframes shake {
+      10%, 90% { transform: translate3d(-2px, 0, 0); }
+      20%, 80% { transform: translate3d(3px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-5px, 0, 0); }
+      40%, 60% { transform: translate3d(5px, 0, 0); }
+    }
+    .pulse-correct {
+      animation: pulseGreen 0.4s ease-out;
+    }
+    @keyframes pulseGreen {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      50% { transform: scale(1.03); box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-between selection:bg-rose-500 selection:text-white">
+
+  <!-- 상단 네비게이션 헤더 -->
+  <header class="w-full max-w-md px-4 py-3 flex items-center justify-between border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-50">
+    <div class="flex items-center gap-2 cursor-pointer" onclick="goToHome()">
+      <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-rose-600 via-rose-500 to-amber-400 flex items-center justify-center shadow-lg shadow-rose-600/30">
+        <div class="w-3.5 h-3.5 bg-slate-950 rounded-full border-2 border-white"></div>
+      </div>
+      <div>
+        <h1 class="text-base font-extrabold tracking-tight bg-gradient-to-r from-rose-400 via-amber-300 to-rose-300 bg-clip-text text-transparent leading-none">
+          PokéType
+        </h1>
+        <span class="text-[10px] text-slate-400 font-semibold" data-i18n="headerSubtitle">상성 퀴즈</span>
+      </div>
+    </div>
+
+    <!-- 우측 제어 버튼: 언어 & 사운드 -->
+    <div class="flex items-center gap-2">
+      <select id="langSelect" onchange="changeLang(this.value)" class="text-xs bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2 py-1 font-medium focus:outline-none focus:ring-1 focus:ring-rose-500 cursor-pointer">
+        <option value="ko">KR 한국어</option>
+        <option value="en">EN English</option>
+        <option value="ja">JA 日本語</option>
+      </select>
+
+      <button id="soundToggleBtn" onclick="toggleSound()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700" title="음소거 켜기/끄기">
+        <i data-lucide="volume-x" class="w-4 h-4 text-slate-400"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- 메인 뷰 컨테이너 -->
+  <main id="app" class="w-full max-w-md px-4 py-4 flex-1 flex flex-col justify-center">
+    <div id="loadingView" class="flex flex-col items-center justify-center gap-4 py-20 text-center">
+      <div class="w-12 h-12 border-4 border-rose-500/20 border-t-rose-500 rounded-full animate-spin"></div>
+      <p class="text-sm font-semibold text-slate-400" data-i18n="loadingData">도감 데이터를 불러오는 중...</p>
+    </div>
+  </main>
+
+  <!-- 풋터 -->
+  <footer class="w-full max-w-md text-center py-3 text-[11px] text-slate-500 border-t border-slate-900">
+    <p>PokéType Master &bull; Pokémon &copy; Nintendo/Game Freak/Creatures</p>
+  </footer>
+
+  <script>
+    // --- 1. 다국어 사전 (i18n Dictionary) ---
+    let currentLang = localStorage.getItem('poketype_lang') || 'ko';
+
+    const I18N = {
+      ko: {
+        headerSubtitle: "상성 퀴즈",
+        loadingData: "도감 데이터를 불러오는 중...",
+        modeSurvival: "서바이벌",
+        modeRank: "랭크 챌린지",
+        modeTraining: "자유 연습",
+        ruleGo: "포켓몬 GO",
+        ruleMain: "본가 (스위치)",
+        formatPkm: "포켓몬 실전",
+        formatType: "타입 상성",
+        formatMix: "랜덤 혼합",
+        startBtn: "시작하기",
+        settingsTitle: "게임 설정",
+        ruleLabel: "데미지 룰",
+        formatLabel: "출제 방식",
+
+        // 질문 문구 보강 (의미 명확화)
+        qAttackPkm: "이 포켓몬에게 효과가 굉장한 타입은?",
+        qAttackType: "이 타입에게 효과가 굉장한 타입은?",
+        qDefenseMove: "이 타입 기술을 반감/무효하는 타입은?",
+
+        questionLabel: "문제",
+        timeLabel: "시간",
+        livesLabel: "라이프",
+        scoreLabel: "점수",
+        comboLabel: "콤보",
+        nextBtn: "다음",
+        finishBtn: "결과 확인",
+        resultTitle: "도전 결과",
+        tierLabel: "달성 티어",
+        finalScore: "최종 점수",
+        retryBtn: "다시 도전",
+        homeBtn: "홈으로",
+        correctFeedback: "정답!",
+        wrongFeedback: "오답!",
+        explanationLabel: "상성 계산:",
+        tierMaster: "마스터 (전설급)",
+        tierUltra: "하이퍼 (에이스)",
+        tierGreat: "슈퍼 (숙련자)",
+        tierPokeball: "몬스터볼 (수련생)"
+      },
+      en: {
+        headerSubtitle: "Matchup Quiz",
+        loadingData: "Loading Pokédex data...",
+        modeSurvival: "Survival",
+        modeRank: "Ranked",
+        modeTraining: "Practice",
+        ruleGo: "Pokémon GO",
+        ruleMain: "Main Series",
+        formatPkm: "Pokémon",
+        formatType: "Type Only",
+        formatMix: "Mixed",
+        startBtn: "Start Quiz",
+        settingsTitle: "Quiz Settings",
+        ruleLabel: "Damage Rule",
+        formatLabel: "Quiz Format",
+
+        // English Questions
+        qAttackPkm: "Super Effective against this Pokémon?",
+        qAttackType: "Super Effective against this type?",
+        qDefenseMove: "Which type resists or negates this move?",
+
+        questionLabel: "Q",
+        timeLabel: "Time",
+        livesLabel: "Lives",
+        scoreLabel: "Score",
+        comboLabel: "Combo",
+        nextBtn: "Next",
+        finishBtn: "View Results",
+        resultTitle: "Challenge Result",
+        tierLabel: "Tier",
+        finalScore: "Final Score",
+        retryBtn: "Play Again",
+        homeBtn: "Home",
+        correctFeedback: "Correct!",
+        wrongFeedback: "Wrong!",
+        explanationLabel: "Effectiveness:",
+        tierMaster: "Master Tier",
+        tierUltra: "Ultra Tier",
+        tierGreat: "Great Tier",
+        tierPokeball: "Poké Ball Tier"
+      },
+      ja: {
+        headerSubtitle: "タイプ相性クイズ",
+        loadingData: "図鑑データを読み込み中...",
+        modeSurvival: "サバイバル",
+        modeRank: "ランク戦",
+        modeTraining: "自由練習",
+        ruleGo: "ポケモンGO",
+        ruleMain: "本編 (Switch)",
+        formatPkm: "ポケモン実践",
+        formatType: "タイプ単体",
+        formatMix: "ランダム混合",
+        startBtn: "スタート",
+        settingsTitle: "設定",
+        ruleLabel: "ルール",
+        formatLabel: "出題形式",
+
+        // Japanese Questions
+        qAttackPkm: "このポケモンに効果がばつぐんなタイプは？",
+        qAttackType: "このタイプに効果がばつぐんなタイプは？",
+        qDefenseMove: "このタイプ技を半減・無効にするタイプは？",
+
+        questionLabel: "問",
+        timeLabel: "時間",
+        livesLabel: "ライフ",
+        scoreLabel: "スコア",
+        comboLabel: "コンボ",
+        nextBtn: "次へ",
+        finishBtn: "結果を見る",
+        resultTitle: "挑戦結果",
+        tierLabel: "ランク",
+        finalScore: "最終スコア",
+        retryBtn: "もう一度挑戦",
+        homeBtn: "ホームへ",
+        correctFeedback: "正解！",
+        wrongFeedback: "不正解！",
+        explanationLabel: "倍率計算:",
+        tierMaster: "マスターボール級",
+        tierUltra: "ハイパーボール級",
+        tierGreat: "スーパーボール級",
+        tierPokeball: "モンスターボール級"
+      }
+    };
+
+    function t(key) {
+      return (I18N[currentLang] && I18N[currentLang][key]) || (I18N['ko'][key]) || key;
+    }
+
+    function changeLang(lang) {
+      currentLang = lang;
+      localStorage.setItem('poketype_lang', lang);
+      document.getElementById('langSelect').value = lang;
+      updateStaticText();
+      if (gameState.screen === 'home') renderHome();
+      else if (gameState.screen === 'question') renderQuestion(gameState.currentQuestion);
+      else if (gameState.screen === 'result') renderResult();
+    }
+
+    function updateStaticText() {
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        el.textContent = t(k);
+      });
+    }
+
+    // --- 2. 타입 및 상성 매트릭스 ---
+    const ALL_TYPES = [
+      'normal', 'fire', 'water', 'electric', 'grass', 'ice',
+      'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
+      'rock', 'ghost', 'dragon', 'steel', 'fairy', 'dark'
+    ];
+
+    const TYPE_NAMES = {
+      ko: {
+        normal: '노말', fire: '불꽃', water: '물', electric: '전기', grass: '풀', ice: '얼음',
+        fighting: '격투', poison: '독', ground: '땅', flying: '비행', psychic: '에스퍼', bug: '벌레',
+        rock: '바위', ghost: '고스트', dragon: '드래곤', steel: '강철', fairy: '페어리', dark: '악'
+      },
+      en: {
+        normal: 'Normal', fire: 'Fire', water: 'Water', electric: 'Electric', grass: 'Grass', ice: 'Ice',
+        fighting: 'Fighting', poison: 'Poison', ground: 'Ground', flying: 'Flying', psychic: 'Psychic', bug: 'Bug',
+        rock: 'Rock', ghost: 'Ghost', dragon: 'Dragon', steel: 'Steel', fairy: 'Fairy', dark: 'Dark'
+      },
+      ja: {
+        normal: 'ノーマル', fire: 'ほのお', water: 'みず', electric: 'でんき', grass: 'くさ', ice: 'こおり',
+        fighting: 'かくとう', poison: 'どく', ground: 'じめん', flying: 'ひこう', psychic: 'エスパー', bug: 'むし',
+        rock: 'いわ', ghost: 'ゴースト', dragon: 'ドラゴン', steel: 'はがね', fairy: 'フェアリー', dark: 'あく'
+      }
+    };
+
+    function getTypeName(typeKey) {
+      return (TYPE_NAMES[currentLang] && TYPE_NAMES[currentLang][typeKey]) || TYPE_NAMES['ko'][typeKey] || typeKey;
+    }
+
+    const TYPE_COLORS = {
+      normal: 'bg-pkm-normal text-slate-900',
+      fire: 'bg-pkm-fire text-white',
+      water: 'bg-pkm-water text-white',
+      electric: 'bg-pkm-electric text-slate-900',
+      grass: 'bg-pkm-grass text-slate-900',
+      ice: 'bg-pkm-ice text-slate-900',
+      fighting: 'bg-pkm-fighting text-white',
+      poison: 'bg-pkm-poison text-white',
+      ground: 'bg-pkm-ground text-slate-900',
+      flying: 'bg-pkm-flying text-white',
+      psychic: 'bg-pkm-psychic text-white',
+      bug: 'bg-pkm-bug text-white',
+      rock: 'bg-pkm-rock text-white',
+      ghost: 'bg-pkm-ghost text-white',
+      dragon: 'bg-pkm-dragon text-white',
+      steel: 'bg-pkm-steel text-slate-900',
+      fairy: 'bg-pkm-fairy text-slate-900',
+      dark: 'bg-pkm-dark text-white'
+    };
+
+    const TYPE_CHART = {
+      normal:   { rock: 0.5, ghost: 0, steel: 0.5 },
+      fire:     { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
+      water:    { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 },
+      electric: { water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 },
+      grass:    { fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 },
+      ice:      { fire: 0.5, water: 0.5, grass: 2, ice: 0.5, ground: 2, flying: 2, dragon: 2, steel: 0.5 },
+      fighting: { normal: 2, ice: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, rock: 2, ghost: 0, dark: 2, steel: 2, fairy: 0.5 },
+      poison:   { grass: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0, fairy: 2 },
+      ground:   { fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 },
+      flying:   { electric: 0.5, grass: 2, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 },
+      psychic:  { fighting: 2, poison: 2, psychic: 0.5, steel: 0.5, dark: 0 },
+      bug:      { fire: 0.5, grass: 2, fighting: 0.5, poison: 0.5, flying: 0.5, psychic: 2, ghost: 0.5, dark: 2, steel: 0.5, fairy: 0.5 },
+      rock:     { fire: 2, ice: 2, fighting: 0.5, ground: 0.5, flying: 2, bug: 2, steel: 0.5 },
+      ghost:    { normal: 0, psychic: 2, ghost: 2, dark: 0.5 },
+      dragon:   { dragon: 2, steel: 0.5, fairy: 0 },
+      steel:    { fire: 0.5, water: 0.5, electric: 0.5, ice: 2, rock: 2, steel: 0.5, fairy: 2 },
+      fairy:    { fire: 0.5, fighting: 2, poison: 0.5, dragon: 2, dark: 2, steel: 0.5 },
+      dark:     { fighting: 0.5, psychic: 2, ghost: 2, dark: 0.5, fairy: 0.5 }
+    };
+
+    function calculateMultiplier(attackType, defenderTypes, isPogo = false) {
+      let multiplier = 1.0;
+      for (const defType of defenderTypes) {
+        let base = 1.0;
+        if (TYPE_CHART[attackType] && TYPE_CHART[attackType][defType] !== undefined) {
+          base = TYPE_CHART[attackType][defType];
+        }
+        if (isPogo) {
+          if (base === 2) multiplier *= 1.6;
+          else if (base === 0.5) multiplier *= 0.625;
+          else if (base === 0) multiplier *= 0.390625;
+        } else {
+          multiplier *= base;
+        }
+      }
+      return multiplier;
+    }
+
+    // --- 3. 오디오 (Mute 기본) ---
+    let isMuted = true;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+    }
+
+    function playSound(type) {
+      if (isMuted) return;
+      try {
+        initAudio();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'correct') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, now);
+          osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.12);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        } else if (type === 'wrong') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.linearRampToValueAtTime(140, now + 0.2);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        }
+      } catch (e) {}
+    }
+
+    function toggleSound() {
+      isMuted = !isMuted;
+      const btn = document.getElementById('soundToggleBtn');
+      if (isMuted) {
+        btn.innerHTML = `<i data-lucide="volume-x" class="w-4 h-4 text-slate-400"></i>`;
+      } else {
+        btn.innerHTML = `<i data-lucide="volume-2" class="w-4 h-4 text-rose-400"></i>`;
+        initAudio();
+      }
+      lucide.createIcons();
+    }
+
+    // --- 4. 포켓몬 데이터 로딩 ---
+    let pokemonDatabase = [];
+
+    async function loadAllPokemonData() {
+      try {
+        const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=1025');
+        const data = await res.json();
+        
+        pokemonDatabase = data.results.map((p, idx) => {
+          const id = idx + 1;
+          return {
+            id: id,
+            slug: p.name,
+            names: {
+              en: p.name.charAt(0).toUpperCase() + p.name.slice(1).replace(/-/g, ' '),
+              ko: '',
+              ja: ''
+            },
+            types: [],
+            sprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`
+          };
+        });
+
+        const typePromises = ALL_TYPES.map(async (t) => {
+          try {
+            const tr = await fetch(`https://pokeapi.co/api/v2/type/${t}`);
+            const td = await tr.json();
+            td.pokemon.forEach(entry => {
+              const urlParts = entry.pokemon.url.split('/').filter(Boolean);
+              const pId = parseInt(urlParts[urlParts.length - 1]);
+              if (pId <= 1025 && pokemonDatabase[pId - 1]) {
+                if (!pokemonDatabase[pId - 1].types.includes(t)) {
+                  pokemonDatabase[pId - 1].types.push(t);
+                }
+              }
+            });
+          } catch(e) {}
+        });
+
+        await Promise.all(typePromises);
+
+        pokemonDatabase.forEach(p => {
+          if (p.types.length === 0) p.types = ['normal'];
+        });
+
+        await loadSpeciesTranslations();
+        renderHome();
+      } catch (err) {
+        console.error("Data load failed", err);
+        renderHome();
+      }
+    }
+
+    async function loadSpeciesTranslations() {
+      try {
+        const batchSize = 100;
+        const total = Math.min(pokemonDatabase.length, 1025);
+        for (let i = 0; i < total; i += batchSize) {
+          const slice = pokemonDatabase.slice(i, i + batchSize);
+          await Promise.all(slice.map(async (p) => {
+            try {
+              const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${p.id}`);
+              const sp = await res.json();
+              sp.names.forEach(n => {
+                if (n.language.name === 'ko') p.names.ko = n.name;
+                if (n.language.name === 'ja-Hrkt' || (n.language.name === 'ja' && !p.names.ja)) p.names.ja = n.name;
+                if (n.language.name === 'en') p.names.en = n.name;
+              });
+            } catch(e) {}
+          }));
+        }
+      } catch(e) {}
+    }
+
+    function getPokemonName(p) {
+      if (!p) return '';
+      if (p.names && p.names[currentLang] && p.names[currentLang].trim() !== '') {
+        return p.names[currentLang];
+      }
+      return p.names.ko || p.names.en || p.slug;
+    }
+
+    // --- 5. 게임 상태 관리 ---
+    const gameState = {
+      screen: 'home',
+      gameMode: 'survival',
+      rule: 'pogo',
+      format: 'pokemon',
+      score: 0,
+      combo: 0,
+      lives: 3,
+      currentQuestionIdx: 0,
+      totalQuestions: 15,
+      timer: null,
+      timeLeft: 7,
+      history: [],
+      currentQuestion: null,
+      isAnswering: false
+    };
+
+    function goToHome() {
+      clearInterval(gameState.timer);
+      gameState.screen = 'home';
+      renderHome();
+    }
+
+    // --- 6. 홈 화면 ---
+    function renderHome() {
+      gameState.screen = 'home';
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <div class="flex flex-col gap-5 py-2">
+          <!-- 모드 탭 -->
+          <div class="grid grid-cols-3 gap-2 p-1 bg-slate-900 rounded-2xl border border-slate-800">
+            <button onclick="setMode('survival')" id="mode-survival" class="py-2.5 rounded-xl text-xs font-bold transition-all ${gameState.gameMode === 'survival' ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30' : 'text-slate-400 hover:text-white'}">
+              <i data-lucide="flame" class="w-4 h-4 mx-auto mb-1"></i>
+              ${t('modeSurvival')}
+            </button>
+            <button onclick="setMode('rank')" id="mode-rank" class="py-2.5 rounded-xl text-xs font-bold transition-all ${gameState.gameMode === 'rank' ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30' : 'text-slate-400 hover:text-white'}">
+              <i data-lucide="trophy" class="w-4 h-4 mx-auto mb-1"></i>
+              ${t('modeRank')}
+            </button>
+            <button onclick="setMode('training')" id="mode-training" class="py-2.5 rounded-xl text-xs font-bold transition-all ${gameState.gameMode === 'training' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-400 hover:text-white'}">
+              <i data-lucide="book-open" class="w-4 h-4 mx-auto mb-1"></i>
+              ${t('modeTraining')}
+            </button>
+          </div>
+
+          <!-- 설정 카드 -->
+          <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 flex flex-col gap-4 shadow-xl">
+            <div class="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <i data-lucide="sliders" class="w-4 h-4 text-rose-400"></i>
+              ${t('settingsTitle')}
+            </div>
+
+            <!-- 데미지 룰 토글 -->
+            <div>
+              <label class="text-xs text-slate-400 block mb-2 font-medium">${t('ruleLabel')}</label>
+              <div class="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-2xl border border-slate-800">
+                <button onclick="setRule('pogo')" class="py-2 rounded-xl text-xs font-bold transition-all ${gameState.rule === 'pogo' ? 'bg-slate-800 text-rose-400 border border-rose-500/30' : 'text-slate-400'}">
+                  ${t('ruleGo')}
+                </button>
+                <button onclick="setRule('main')" class="py-2 rounded-xl text-xs font-bold transition-all ${gameState.rule === 'main' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-400'}">
+                  ${t('ruleMain')}
+                </button>
+              </div>
+            </div>
+
+            <!-- 출제 방식 토글 -->
+            <div>
+              <label class="text-xs text-slate-400 block mb-2 font-medium">${t('formatLabel')}</label>
+              <div class="grid grid-cols-3 gap-2 bg-slate-950 p-1 rounded-2xl border border-slate-800">
+                <button onclick="setFormat('pokemon')" class="py-2 rounded-xl text-xs font-bold transition-all ${gameState.format === 'pokemon' ? 'bg-slate-800 text-cyan-400 border border-cyan-500/30' : 'text-slate-400'}">
+                  ${t('formatPkm')}
+                </button>
+                <button onclick="setFormat('type')" class="py-2 rounded-xl text-xs font-bold transition-all ${gameState.format === 'type' ? 'bg-slate-800 text-purple-400 border border-purple-500/30' : 'text-slate-400'}">
+                  ${t('formatType')}
+                </button>
+                <button onclick="setFormat('mix')" class="py-2 rounded-xl text-xs font-bold transition-all ${gameState.format === 'mix' ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30' : 'text-slate-400'}">
+                  ${t('formatMix')}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 시작 버튼 -->
+          <button onclick="startQuiz()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 hover:from-rose-500 hover:to-amber-400 text-white font-extrabold text-base tracking-wide shadow-lg shadow-rose-600/30 active:scale-95 transition-all flex items-center justify-center gap-2">
+            <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+            ${t('startBtn')}
+          </button>
+        </div>
+      `;
+      lucide.createIcons();
+    }
+
+    function setMode(m) { gameState.gameMode = m; renderHome(); }
+    function setRule(r) { gameState.rule = r; renderHome(); }
+    function setFormat(f) { gameState.format = f; renderHome(); }
+
+    // --- 7. 문제 생성 ---
+    function startQuiz() {
+      gameState.score = 0;
+      gameState.combo = 0;
+      gameState.lives = 3;
+      gameState.currentQuestionIdx = 0;
+      gameState.history = [];
+      nextQuestion();
+    }
+
+    function nextQuestion() {
+      if (gameState.gameMode === 'rank' && gameState.currentQuestionIdx >= gameState.totalQuestions) {
+        showResults();
+        return;
+      }
+      if (gameState.gameMode === 'survival' && gameState.lives <= 0) {
+        showResults();
+        return;
+      }
+
+      gameState.currentQuestionIdx++;
+      gameState.isAnswering = false;
+
+      const q = generateQuestion();
+      gameState.currentQuestion = q;
+      renderQuestion(q);
+
+      if (gameState.gameMode === 'survival') {
+        startTimer(7);
+      }
+    }
+
+    function generateQuestion() {
+      let isPokemonQuestion = true;
+      if (gameState.format === 'pokemon') {
+        isPokemonQuestion = true;
+      } else if (gameState.format === 'type') {
+        isPokemonQuestion = false;
+      } else {
+        isPokemonQuestion = Math.random() < 0.6;
+      }
+
+      const isAttackQuestion = Math.random() < 0.7;
+      const isPogo = gameState.rule === 'pogo';
+
+      const targetPokemon = pokemonDatabase[Math.floor(Math.random() * pokemonDatabase.length)] || {
+        id: 25,
+        slug: 'pikachu',
+        names: { ko: '피카츄', en: 'Pikachu', ja: 'ピカチュウ' },
+        types: ['electric'],
+        sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png'
+      };
+
+      const targetTypes = isPokemonQuestion ? targetPokemon.types : [ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)]];
+
+      if (isAttackQuestion) {
+        // [공격 문제]: 대상에게 효과 발군인 공격 타입 맞히기
+        const superEffectiveTypes = ALL_TYPES.filter(atk => {
+          return calculateMultiplier(atk, targetTypes, isPogo) > 1.0;
+        });
+
+        let correctType = superEffectiveTypes[Math.floor(Math.random() * superEffectiveTypes.length)] || ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)];
+        const wrongTypes = ALL_TYPES.filter(t => !superEffectiveTypes.includes(t)).sort(() => 0.5 - Math.random()).slice(0, 3);
+        const options = [correctType, ...wrongTypes].sort(() => 0.5 - Math.random());
+
+        return {
+          isPokemonQuestion,
+          isAttackQuestion: true,
+          targetPokemon,
+          targetTypes,
+          correctType,
+          options,
+          calcExplanation: `${superEffectiveTypes.map(t => getTypeName(t)).join(', ')} (${isPogo ? '1.6x+' : '2.0x+'})`
+        };
+      } else {
+        // [방어 문제]: 날아오는 공격 기술을 반감/무효할 방어 타입 맞히기
+        const enemyAttackType = targetTypes[Math.floor(Math.random() * targetTypes.length)] || 'bug';
+
+        const resistingTypes = ALL_TYPES.filter(def => {
+          return calculateMultiplier(enemyAttackType, [def], isPogo) < 1.0;
+        });
+
+        let correctType = resistingTypes[Math.floor(Math.random() * resistingTypes.length)] || 'steel';
+        const wrongTypes = ALL_TYPES.filter(t => !resistingTypes.includes(t)).sort(() => 0.5 - Math.random()).slice(0, 3);
+        const options = [correctType, ...wrongTypes].sort(() => 0.5 - Math.random());
+
+        return {
+          isPokemonQuestion,
+          isAttackQuestion: false,
+          targetPokemon,
+          targetTypes,
+          enemyAttackType,
+          correctType,
+          options,
+          calcExplanation: `${resistingTypes.map(t => getTypeName(t)).join(', ')} (${isPogo ? '0.625x' : '0.5x'})`
+        };
+      }
+    }
+
+    // --- 8. 퀴즈 화면 렌더링 (원래 사용자 인터페이스 복원 + 문구만 정확하게 적용) ---
+    function renderQuestion(q) {
+      gameState.screen = 'question';
+      const app = document.getElementById('app');
+
+      // 요청하신 정확한 문구 배정
+      let questionTitle = '';
+      if (q.isAttackQuestion) {
+        questionTitle = q.isPokemonQuestion ? t('qAttackPkm') : t('qAttackType');
+      } else {
+        questionTitle = t('qDefenseMove');
+      }
+
+      app.innerHTML = `
+        <div class="flex flex-col items-center w-full py-1">
+          <!-- 상단 보라/청록 알약 뱃지 (질문 문구) -->
+          <div class="mb-4 px-4 py-1.5 rounded-full ${q.isAttackQuestion ? 'bg-[#3b233a] text-rose-300' : 'bg-[#143242] text-cyan-300'} text-xs font-bold tracking-tight text-center">
+            ${questionTitle}
+          </div>
+
+          <!-- 상단 스테이터스 및 타이머 (서바이벌 시) -->
+          ${gameState.gameMode === 'survival' ? `
+            <div class="w-full flex items-center justify-between px-2 mb-2 text-xs font-bold text-slate-400">
+              <span class="text-rose-400 font-extrabold flex items-center gap-1">
+                <i data-lucide="timer" class="w-3.5 h-3.5"></i> ${gameState.timeLeft}s
+              </span>
+              <div class="flex items-center gap-1">
+                ${Array(3).fill(0).map((_, i) => `
+                  <i data-lucide="heart" class="w-3.5 h-3.5 ${i < gameState.lives ? 'fill-rose-500 text-rose-500' : 'text-slate-700'}"></i>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- 대상 본체 카드 영역 -->
+          <div id="targetCard" class="w-full flex flex-col items-center justify-center mb-4 transition-all">
+            ${q.isPokemonQuestion ? `
+              <!-- 도감 번호 -->
+              <span class="text-xs text-slate-500 font-semibold mb-1">#${String(q.targetPokemon.id).padStart(4, '0')}</span>
+
+              <!-- 포켓몬 이미지 -->
+              <div class="relative w-36 h-36 flex items-center justify-center mb-2">
+                <img src="${q.targetPokemon.sprite}" alt="${getPokemonName(q.targetPokemon)}" class="w-full h-full object-contain filter drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]" onerror="this.style.display='none'">
+              </div>
+
+              <!-- 포켓몬 이름 -->
+              <h2 class="text-xl font-black text-white tracking-tight mb-2">
+                ${getPokemonName(q.targetPokemon)}
+              </h2>
+
+              <!-- 포켓몬 고유 타입 뱃지 -->
+              <div class="flex items-center gap-1.5">
+                ${q.targetPokemon.types.map(t => `
+                  <span class="text-xs font-bold px-3 py-1 rounded-full ${TYPE_COLORS[t]} shadow-sm">
+                    ${getTypeName(t)}
+                  </span>
+                `).join('')}
+              </div>
+
+              <!-- 방어 문제일 때: 상대가 날려오는 기술의 타입 뱃지 (직관적으로 분리) -->
+              ${!q.isAttackQuestion ? `
+                <div class="mt-2 text-xs font-bold px-3 py-1 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                  <span class="text-[10px] text-cyan-400">⚡</span>
+                  <span>${getTypeName(q.enemyAttackType)}</span>
+                </div>
+              ` : ''}
+
+            ` : `
+              <!-- 순수 타입 퀴즈인 경우 -->
+              <div class="py-10 flex flex-col items-center">
+                <div class="text-lg font-black px-8 py-2.5 rounded-2xl ${TYPE_COLORS[q.isAttackQuestion ? q.targetTypes[0] : q.enemyAttackType]} shadow-lg">
+                  ${getTypeName(q.isAttackQuestion ? q.targetTypes[0] : q.enemyAttackType)}
+                </div>
+              </div>
+            `}
+          </div>
+
+          <!-- 보기 4지선다 (타입 버튼 그리드) -->
+          <div class="grid grid-cols-2 gap-2.5 w-full mt-2">
+            ${q.options.map((opt, idx) => {
+              const label = getTypeName(opt);
+              return `
+                <button onclick="handleSelect(${idx})" id="opt-btn-${idx}" class="opt-btn p-3.5 rounded-2xl transition-all flex items-center justify-center text-center active:scale-95 ${TYPE_COLORS[opt]} font-black shadow-md">
+                  <span class="text-sm font-black">${label}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- 정답 피드백 영역 (자유 연습 모드 전용) -->
+          <div id="feedbackArea" class="hidden flex-col gap-2 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 w-full mt-3 animate-fade-in">
+            <div id="feedbackText" class="text-sm font-extrabold"></div>
+            <div id="feedbackExp" class="text-xs text-slate-400"></div>
+            <button onclick="nextQuestion()" class="w-full py-2.5 mt-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700">
+              ${t('nextBtn')}
+            </button>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+    }
+
+    // --- 9. 정답 판정 ---
+    function handleSelect(selectedIdx) {
+      if (gameState.isAnswering) return;
+      gameState.isAnswering = true;
+      clearInterval(gameState.timer);
+
+      const q = gameState.currentQuestion;
+      const selected = q.options[selectedIdx];
+      const isCorrect = (selected === q.correctType);
+
+      const selectedBtn = document.getElementById(`opt-btn-${selectedIdx}`);
+      const feedbackArea = document.getElementById('feedbackArea');
+      const feedbackText = document.getElementById('feedbackText');
+      const feedbackExp = document.getElementById('feedbackExp');
+      const targetCard = document.getElementById('targetCard');
+
+      if (isCorrect) {
+        playSound('correct');
+        gameState.score += 100 + (gameState.combo * 15);
+        gameState.combo++;
+        selectedBtn.classList.add('ring-4', 'ring-emerald-500', 'pulse-correct');
+
+        if (gameState.combo >= 5) {
+          confetti({ particleCount: 35, spread: 60, origin: { y: 0.85 } });
+        }
+      } else {
+        playSound('wrong');
+        gameState.combo = 0;
+        if (gameState.gameMode === 'survival') {
+          gameState.lives--;
+        }
+        selectedBtn.classList.add('ring-4', 'ring-rose-500', 'shake');
+        if (targetCard) targetCard.classList.add('shake');
+      }
+
+      if (gameState.gameMode === 'training') {
+        feedbackArea.classList.remove('hidden');
+        feedbackArea.classList.add('flex');
+        feedbackText.className = `text-sm font-extrabold ${isCorrect ? 'text-emerald-400' : 'text-rose-400'}`;
+        feedbackText.textContent = isCorrect ? t('correctFeedback') : t('wrongFeedback');
+        feedbackExp.textContent = `${t('explanationLabel')} ${q.calcExplanation}`;
+      } else {
+        setTimeout(() => {
+          nextQuestion();
+        }, 650);
+      }
+    }
+
+    // --- 10. 타이머 로직 ---
+    function startTimer(seconds) {
+      clearInterval(gameState.timer);
+      gameState.timeLeft = seconds;
+
+      gameState.timer = setInterval(() => {
+        gameState.timeLeft--;
+        const app = document.getElementById('app');
+        const timerText = app ? app.querySelector('#timerText') : null;
+        if (timerText) timerText.textContent = `${gameState.timeLeft}s`;
+
+        if (gameState.timeLeft <= 0) {
+          clearInterval(gameState.timer);
+          handleTimeOut();
+        }
+      }, 1000);
+    }
+
+    function handleTimeOut() {
+      if (gameState.isAnswering) return;
+      gameState.isAnswering = true;
+      playSound('wrong');
+      gameState.lives--;
+      gameState.combo = 0;
+      
+      const targetCard = document.getElementById('targetCard');
+      if (targetCard) targetCard.classList.add('shake');
+
+      setTimeout(() => {
+        nextQuestion();
+      }, 650);
+    }
+
+    // --- 11. 결과 화면 ---
+    function showResults() {
+      gameState.screen = 'result';
+      const app = document.getElementById('app');
+
+      let tier = t('tierPokeball');
+      let tierColor = 'text-slate-300';
+      if (gameState.score >= 1800) {
+        tier = t('tierMaster');
+        tierColor = 'text-purple-400';
+        confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+      } else if (gameState.score >= 1200) {
+        tier = t('tierUltra');
+        tierColor = 'text-amber-400';
+      } else if (gameState.score >= 600) {
+        tier = t('tierGreat');
+        tierColor = 'text-cyan-400';
+      }
+
+      app.innerHTML = `
+        <div class="flex flex-col gap-4 py-4 items-center text-center">
+          <div class="w-20 h-20 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center shadow-2xl">
+            <i data-lucide="award" class="w-10 h-10 ${tierColor}"></i>
+          </div>
+
+          <div>
+            <h2 class="text-xl font-black text-white">${t('resultTitle')}</h2>
+            <p class="text-xs text-slate-400 mt-1">${t('tierLabel')}: <span class="font-extrabold ${tierColor}">${tier}</span></p>
+          </div>
+
+          <div class="w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-5 flex flex-col gap-3">
+            <div class="flex justify-between items-center text-xs text-slate-400 font-medium">
+              <span>${t('finalScore')}</span>
+              <span class="text-base font-black text-white">${gameState.score}P</span>
+            </div>
+            <div class="flex justify-between items-center text-xs text-slate-400 font-medium">
+              <span>${t('comboLabel')}</span>
+              <span class="text-base font-black text-amber-400">${gameState.combo}</span>
+            </div>
+          </div>
+
+          <div class="w-full flex flex-col gap-2 mt-2">
+            <button onclick="startQuiz()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-500 text-white font-extrabold text-sm shadow-lg shadow-rose-600/30">
+              ${t('retryBtn')}
+            </button>
+            <button onclick="goToHome()" class="w-full py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-extrabold text-sm border border-slate-700">
+              ${t('homeBtn')}
+            </button>
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+    }
+
+    // 앱 초기화
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('langSelect').value = currentLang;
+      loadAllPokemonData();
+    });
+  </script>
+</body>
+</html>
